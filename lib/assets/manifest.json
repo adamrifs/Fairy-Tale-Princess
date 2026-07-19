@@ -1,0 +1,86 @@
+{
+  "generatedAt": "2026-07-19T20:49:22.368Z",
+  "sectionOrder": [
+    "section-1",
+    "section-2",
+    "section-3",
+    "section-4",
+    "section-5"
+  ],
+  "sections": {
+    "section-1": {
+      "frames": {
+        "frames": {
+          "path": "/sections/section-1/",
+          "count": 1185,
+          "prefix": "frame_",
+          "extension": "webp",
+          "padding": 4,
+          "files": null
+        }
+      },
+      "videos": {}
+    },
+    "section-2": {
+      "frames": {
+        "dressingRoom": {
+          "path": "/sections/section-2/dressingRoom_frames/",
+          "count": 300,
+          "prefix": "frame_",
+          "extension": "webp",
+          "padding": 4,
+          "files": null
+        }
+      },
+      "videos": {}
+    },
+    "section-3": {
+      "frames": {
+        "bedroom": {
+          "path": "/sections/section-3/bedroom_frames/",
+          "count": 300,
+          "prefix": "frame_",
+          "extension": "webp",
+          "padding": 4,
+          "files": null
+        }
+      },
+      "videos": {}
+    },
+    "section-4": {
+      "frames": {
+        "chocolateRoom": {
+          "path": "/sections/section-4/chocolateRoom_frames/",
+          "count": 300,
+          "prefix": "frame_",
+          "extension": "webp",
+          "padding": 4,
+          "files": null
+        }
+      },
+      "videos": {}
+    },
+    "section-5": {
+      "frames": {},
+      "videos": {
+        "finalScene": {
+          "path": "/sections/section-5/finalScene.mp4",
+          "format": "mp4"
+        }
+      }
+    }
+  },
+  "music": {},
+  "sounds": {
+    "bgm_optimized": {
+      "path": "/sounds/bgm_optimized.mp3",
+      "format": "mp3"
+    }
+  },
+  "fonts": {},
+  "assets": {
+    "loadingScreen": {
+      "path": "/assets/loadingScreen.png"
+    }
+  }
+}

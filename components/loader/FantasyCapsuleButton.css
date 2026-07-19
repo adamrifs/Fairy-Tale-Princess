@@ -1,0 +1,150 @@
+/* ==========================================================================
+   THE INTERACTIVE FANTASY CAPSULE BUTTON
+   ========================================================================== */
+
+.fantasy-capsule-button {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 220, 230, 0.25),
+    rgba(180, 120, 150, 0.18)
+  );
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  width: 420px;
+  height: 34px;
+  border-radius: 999px;
+  cursor: pointer;
+  outline: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  padding: 0;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  animation: button-breeze 4.5s infinite alternate ease-in-out;
+}
+
+@keyframes button-breeze {
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-3px) rotate(0.2deg); }
+  100% { transform: translateY(1px) rotate(-0.1deg); }
+}
+
+.fantasy-capsule-button .button-content {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.fantasy-capsule-button .button-text {
+  font-family: var(--font-sans), 'Georgia', serif;
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: #f7d0df;
+  text-shadow: 0 0 10px rgba(247, 208, 223, 0.45);
+  transition: all 0.4s ease;
+  position: relative;
+  z-index: 6;
+}
+
+/* Subtle glowing backdrop behind button */
+.btn-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 120%;
+  height: 240%;
+  background: radial-gradient(circle, rgba(255, 191, 215, 0.18) 0%, transparent 70%);
+  transform: translate(-50%, -50%) scale(0.8);
+  opacity: 0;
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Hover, active and focus states */
+.fantasy-capsule-button:hover {
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow: 
+    0 0 20px rgba(255, 191, 215, 0.4),
+    0 0 40px rgba(247, 208, 223, 0.2),
+    0 0 60px rgba(255, 191, 215, 0.1),
+    inset 0 0 15px rgba(255, 220, 230, 0.3),
+    inset 0 1px 2px rgba(255, 255, 255, 0.8);
+  animation-play-state: paused;
+  transform: translateY(-2px);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 220, 230, 0.4),
+    rgba(180, 120, 150, 0.25)
+  );
+}
+
+.fantasy-capsule-button:hover .button-text {
+  color: #ffffff;
+  text-shadow: 0 0 15px rgba(255, 255, 255, 0.9), 0 0 8px #ffbfd7;
+}
+
+.fantasy-capsule-button:active {
+  transform: translateY(1px) scale(0.98);
+  box-shadow: 
+    0 4px 10px rgba(255, 191, 215, 0.08),
+    inset 0 1px 1px rgba(0, 0, 0, 0.25);
+  transition: all 0.1s ease;
+}
+
+/* ==========================================================================
+   MAGICAL CLICK PARTICLE BURST
+   ========================================================================== */
+
+.burst-petal {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  width: 8px;
+  height: 12px;
+  background-color: var(--petal-color, #ffbfd7);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  opacity: 0.8;
+  will-change: transform, opacity;
+  animation: burst-fade var(--burst-duration, 1.2s) forwards cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.burst-sparkle {
+  position: fixed;
+  pointer-events: none;
+  z-index: 10000;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  box-shadow: 0 0 6px #ffffff, 0 0 12px var(--sparkle-color, #ffbfd7);
+  opacity: 1;
+  will-change: transform, opacity;
+  animation: burst-fade var(--burst-duration, 1s) forwards cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes burst-fade {
+  to {
+    opacity: 0;
+    transform: translate(var(--tx), var(--ty)) rotate(var(--tr)) scale(var(--ts));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fantasy-capsule-button {
+    animation: none !important;
+  }
+}

@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+:root {
+  /* Brand palette — source of truth also mirrored in constants/theme.js */
+  --royal-gold: #d4af37;
+  --soft-pink: #f3c6d6;
+  --ivory: #fff8e9;
+  --midnight-blue: #0b1246;
+  --moon-white: #f7f7f4;
+
+  /* Stacking order — mirrored in constants/zIndex.js. Kept out of the
+     Tailwind theme namespace on purpose; consume via arbitrary values,
+     e.g. z-[var(--z-loader)], so JS and CSS never drift apart. */
+  --z-base: 0;
+  --z-background: 10;
+  --z-content: 20;
+  --z-story: 30;
+  --z-navigation: 40;
+  --z-audio-controls: 50;
+  --z-overlay: 80;
+  --z-modal: 90;
+  --z-loader: 100;
+  --z-cursor: 999;
+}
+
+/* `inline` keeps these as live var() references instead of precomputing
+   them at build time — required because --font-display/serif/sans are set
+   at runtime by next/font on the <html> element. */
+@theme inline {
+  --color-royal-gold: var(--royal-gold);
+  --color-soft-pink: var(--soft-pink);
+  --color-ivory: var(--ivory);
+  --color-midnight-blue: var(--midnight-blue);
+  --color-moon-white: var(--moon-white);
+
+  --font-display: var(--font-display);
+  --font-serif: var(--font-serif);
+  --font-sans: var(--font-sans);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  html {
+    scroll-behavior: auto !important;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  /* Lenis drives smooth scrolling manually; native smooth-scroll would fight it. */
+  scroll-behavior: auto;
+}
+
+body {
+  background: var(--midnight-blue);
+  color: var(--moon-white);
+  /* Full-bleed cinematic sections must never introduce horizontal scroll/jank. */
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--royal-gold);
+  color: var(--midnight-blue);
+}
+
+/* Custom fade-in animations for smooth minimalist transitions */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in-delayed {
+  animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+  opacity: 0;
+}
+
+.animate-fade-in-more-delayed {
+  animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+  opacity: 0;
+}

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /home/adamrifsal/disney-fairytale-experience/scripts)",
+      "Bash(node scripts/generate-asset-manifest.js)",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(find / -maxdepth 4 -iname \"*playwright*\")",
+      "Bash(lsof -ti:3000,3001 -sTCP:LISTEN)"
+    ],
+    "additionalDirectories": [
+      "/home/adamrifsal/disney-fairytale-experience"
+    ]
+  }
+}

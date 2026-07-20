@@ -82,7 +82,7 @@ export const StoryText = memo(function StoryText({
               {heading}
             </h2>
             {subtitle && (
-              <p className="mt-6 max-w-3xl text-balance font-serif italic text-xl md:text-2xl lg:text-3xl font-normal leading-[1.8] tracking-widest text-[#fffdf0] drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)] opacity-90">
+              <p className="mt-6 max-w-4xl text-balance font-serif italic text-xl md:text-2xl lg:text-3xl font-normal leading-[1.8] tracking-widest text-[#fffdf0] drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)] opacity-90">
                 {subtitle}
               </p>
             )}

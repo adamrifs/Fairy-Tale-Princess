@@ -69,27 +69,41 @@ export const Section1Scene = memo(function Section1Scene({ progress = 0 }) {
     return () => observer.disconnect();
   }, []);
 
+  const [appEntered, setAppEntered] = useState(false);
+
+  useEffect(() => {
+    const checkLoader = () => {
+      const loader = document.querySelector('div[role="status"][aria-live="polite"]');
+      if (!loader) {
+        setAppEntered(true);
+      } else {
+        requestAnimationFrame(checkLoader);
+      }
+    };
+    checkLoader();
+  }, []);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (!videoActive || !isInView) {
+    if (!videoActive || !isInView || !appEntered) {
       video.pause();
     } else if (video.paused) {
       video.play().catch(() => {});
     }
-  }, [videoActive, isInView]);
+  }, [videoActive, isInView, appEntered]);
 
   // Pause the end video until it starts becoming visible
   const endVideoRef = useRef(null);
   useEffect(() => {
     const video = endVideoRef.current;
     if (!video) return;
-    if (!endVideoActive) {
+    if (!endVideoActive || !appEntered) {
       video.pause();
     } else if (video.paused) {
       video.play().catch(() => {});
     }
-  }, [endVideoActive]);
+  }, [endVideoActive, appEntered]);
 
   // Seed the initial window on mount — frames start loading while the video
   // is playing so they're ready the moment the crossfade begins.

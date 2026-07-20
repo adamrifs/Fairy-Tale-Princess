@@ -16,15 +16,7 @@ export const SECTION1_TITLE = "A Fairy Tale Begins";
 
 export const SECTION1_TEXTS = [
   {
-    heading: "A Golden Morning",
-    subtitle: "Every morning began beneath crystal chandeliers and golden halls.",
-  },
-  {
-    heading: "A Kingdom's Admiration",
-    subtitle: "Her kingdom admired her beauty, her kindness, and her gentle heart.",
-  },
-  {
-    heading: "Yet Her Heart Waited",
-    subtitle: "Even surrounded by a magnificent palace... her heart still waited for someone who would choose her, not because she was a princess... but simply because she was herself.",
+    heading: "A Kingdom's Beloved Princess",
+    subtitle: "Every morning began beneath crystal chandeliers and golden halls. Admired for her beauty, kindness, and gentle heart, she had everything a princess could wish for—except someone who would love her simply for who she truly was.",
   },
 ];

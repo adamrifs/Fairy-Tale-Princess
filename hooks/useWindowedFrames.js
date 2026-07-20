@@ -6,13 +6,13 @@ import { cacheManager } from "@/lib/assets/CacheManager";
 import { getDevicePixelRatio } from "@/utils";
 
 /**
- * How many frames to keep decoded around the current position. The source
- * frames are 4K (3840×2160 → 33MB decoded RGBA each), but decodes are
- * downscaled to display resolution (see decodeFrame), so a resident frame
- * costs ~5MB. Worst-case residency is the window plus EVICTION_GRACE on
- * each side (~86 frames ≈ 400MB, transient); steady-state during
- * scrolling is far lower (~window + in-flight ≈ 150-200MB), well within
- * a tab's budget. The window is biased in the direction of travel.
+ * How many frames to keep decoded around the current position. Source
+ * frames ship at 1600px (~90KB webp; 4K originals live in assets-src/),
+ * and decodes are further downscaled to display resolution when smaller
+ * (see decodeFrame) — a resident decoded frame costs ~4-6MB of RGBA.
+ * Worst-case residency is the window plus EVICTION_GRACE on each side
+ * (~86 frames, transient); steady-state during scrolling is far lower
+ * (~window + in-flight). The window is biased in the direction of travel.
  */
 const WINDOW_MAJOR = 20; // frames kept in the scroll direction
 const WINDOW_MINOR = 5; // frames kept opposite the scroll direction
@@ -49,6 +49,52 @@ const NEAREST_SEARCH_RADIUS = 120;
  */
 const EVICTION_GRACE = 30;
 
+/**
+ * Network prefetch tier: compressed blobs are fetched this many frames
+ * around the current position — far wider than the decode window, and
+ * cheap to hold (~90KB compressed each ≈ ~17MB for the whole range,
+ * vs ~5MB per DECODED frame). This exists for production: on localhost
+ * every fetch is ~instant so the decode window alone stays fed, but over
+ * a real network (CDN latency + limited bandwidth) fetching only when a
+ * frame enters the small decode window means every decode pays network
+ * latency mid-scroll and the canvas starves. Prefetching well ahead
+ * decouples the network from the scrub: by the time a frame enters the
+ * decode window its bytes are already in memory.
+ */
+const PREFETCH_MAJOR = 150; // compressed blobs kept in the scroll direction
+const PREFETCH_MINOR = 30; // compressed blobs kept opposite the scroll direction
+// Production (Vercel) serves HTTP/2, where these multiplex over one
+// connection and higher parallelism hides per-request latency. Measured
+// A/B under emulated 25Mbps+60ms: 10 concurrent beat 6 decisively.
+const MAX_CONCURRENT_PREFETCHES = 10;
+
+/**
+ * Blobs slightly outside the moving prefetch range are kept this many
+ * frames longer before eviction — the same lesson as EVICTION_GRACE at
+ * the decode tier: under sustained scrolling a fetch completes ~hundreds
+ * of ms after it was queued, by which point the range has moved past it;
+ * evicting it immediately throws away bytes that were just paid for.
+ */
+const PREFETCH_GRACE = 60;
+
+/**
+ * Keyframe ladder: every LADDER_STRIDE-th frame's compressed blob is
+ * fetched progressively in the background and NEVER evicted (~148 blobs
+ * × ~100KB ≈ 15MB — trivial). This is what makes fast scrolling smooth
+ * when scroll demand exceeds network supply: bandwidth can never keep up
+ * with every frame at ~300 frames/s of scrub demand, but ladder frames
+ * are always local, so the decoder can land a nearby frame every tick
+ * and the display advances in LADDER_STRIDE steps (~30 visual updates/s
+ * — reads as fluid motion), with exact frames filling in as soon as the
+ * scroll slows. Without the ladder, sustained scrolling starves: every
+ * in-flight fetch goes stale before it can be shown.
+ */
+const LADDER_STRIDE = 8;
+
+function isLadderIndex(index) {
+  return index % LADDER_STRIDE === 0;
+}
+
 function frameCacheKey(sectionId, sceneId, index) {
   return `${sectionId}:${sceneId}:${index}`;
 }
@@ -69,11 +115,14 @@ function resolveFrameUrl(descriptor, index) {
  * The resize options are try/caught because Safari historically ignores/
  * throws on them — full-size decode is the graceful fallback.
  */
-async function decodeFrame(url, signal, resizeWidth) {
+async function decodeFrame(url, signal, resizeWidth, prefetchedBlob) {
   if (typeof createImageBitmap === "function") {
-    const response = await fetch(url, { signal });
-    if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
-    const blob = await response.blob();
+    let blob = prefetchedBlob;
+    if (!blob) {
+      const response = await fetch(url, { signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
+      blob = await response.blob();
+    }
     if (resizeWidth) {
       try {
         return await createImageBitmap(blob, { resizeWidth, resizeQuality: "medium" });
@@ -154,11 +203,21 @@ export function useWindowedFrames(sectionId, sceneId) {
   const lastIndexRef = useRef(0); // previous loadWindow index — determines scroll direction
   const targetWidthRef = useRef(null); // decode-time resize width, computed lazily in the browser
 
+  // Network prefetch tier state — compressed blobs, index-keyed.
+  const blobsRef = useRef(new Map()); // index -> Blob (compressed bytes, ~90KB each)
+  const blobInFlightRef = useRef(new Set());
+  const prefetchQueueRef = useRef([]);
+  const activePrefetchCountRef = useRef(0);
+  const prefetchRangeRef = useRef({ start: -1, end: -1 });
+
   useEffect(() => {
     abortRef.current = new AbortController();
+    const blobs = blobsRef.current; // stable Map instance — captured to satisfy exhaustive-deps
     return () => {
       abortRef.current?.abort();
       queueRef.current = [];
+      prefetchQueueRef.current = [];
+      blobs.clear();
       // Full teardown, not a window-narrowing — evict everything cached
       // for this section/scene, not just the last known window (an
       // in-flight decode from just before unmount could otherwise land
@@ -167,14 +226,78 @@ export function useWindowedFrames(sectionId, sceneId) {
     };
   }, [sectionId, sceneId]);
 
+  /**
+   * Fetch-only pump for the prefetch tier: pulls compressed blobs into
+   * blobsRef so the decode pump never has to touch the network for a
+   * frame the user is about to reach. Completed fetches are kept even if
+   * the range has drifted a bit (the range sweep in loadWindow bounds
+   * them) — same lesson as EVICTION_GRACE, applied to bytes.
+   */
+  const prefetchPump = useCallback(() => {
+    while (
+      activePrefetchCountRef.current < MAX_CONCURRENT_PREFETCHES &&
+      prefetchQueueRef.current.length > 0
+    ) {
+      const index = prefetchQueueRef.current.shift();
+      const { start, end } = prefetchRangeRef.current;
+      // Ladder rungs are global background fill — never stale, whatever
+      // the near range has moved to. Only non-ladder (exact-frame) work
+      // is dropped when the range has left it behind.
+      if (!isLadderIndex(index) && (index < start || index > end)) continue;
+      if (blobsRef.current.has(index) || blobInFlightRef.current.has(index)) continue;
+
+      blobInFlightRef.current.add(index);
+      activePrefetchCountRef.current += 1;
+
+      const url = resolveFrameUrl(descriptor, index);
+      const signal = abortRef.current?.signal;
+
+      fetch(url, { signal })
+        .then((response) => (response.ok ? response.blob() : null))
+        .then((blob) => {
+          if (blob && !signal?.aborted) {
+            blobsRef.current.set(index, blob);
+            // A landed blob is its own decode candidate: the decode pump
+            // consumes-and-skips indexes whose bytes weren't local yet,
+            // so by the time this fetch resolves, this index's queue
+            // entry is usually gone — re-enqueue at the front (decodes
+            // are pure CPU now, and the pump's own bounds check drops it
+            // if the window has truly moved on).
+            const { start, end } = loadedWindowRef.current;
+            if (index >= start - EVICTION_GRACE && index <= end + EVICTION_GRACE) {
+              queueRef.current.unshift(index);
+            }
+            pump();
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          blobInFlightRef.current.delete(index);
+          activePrefetchCountRef.current -= 1;
+          prefetchPump();
+        });
+    }
+    // descriptor is stable for a mounted section; pump is defined below
+    // and stable — see its own useCallback([]) rationale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const pump = useCallback(() => {
     while (activeDecodeCountRef.current < MAX_CONCURRENT_DECODES && queueRef.current.length > 0) {
       const index = queueRef.current.shift();
       const { start, end } = loadedWindowRef.current;
 
-      // The window may have moved past this index while it sat in the
-      // queue — skip it rather than spend a decode slot on stale work.
-      if (index < start || index > end) continue;
+      // Decode slots do CPU work ONLY — an index whose bytes aren't
+      // local yet is skipped, not fetched. Live-network tracing showed
+      // why this rule is load-bearing: when decodes were allowed to
+      // fetch for themselves, six slots sat occupied ~300ms each by
+      // bandwidth-starved exact-frame downloads while already-local
+      // ladder rungs (15ms decodes that would have kept the canvas
+      // advancing) queued behind them — the pipeline clogged itself.
+      // The prefetch tier owns all fetching and will wake this pump
+      // (see prefetchPump) the moment bytes land.
+      if (!blobsRef.current.has(index)) continue;
+      if (index < start - EVICTION_GRACE || index > end + EVICTION_GRACE) continue;
 
       const key = frameCacheKey(sectionId, sceneId, index);
       if (cacheManager.hasImage(key) || inFlightRef.current.has(index)) continue;
@@ -185,7 +308,7 @@ export function useWindowedFrames(sectionId, sceneId) {
       const url = resolveFrameUrl(descriptor, index);
       const signal = abortRef.current?.signal;
 
-      decodeFrame(url, signal, targetWidthRef.current)
+      decodeFrame(url, signal, targetWidthRef.current, blobsRef.current.get(index))
         .then((bitmap) => {
           if (signal?.aborted) {
             bitmap.close?.();
@@ -231,8 +354,13 @@ export function useWindowedFrames(sectionId, sceneId) {
 
       // Bias the window in the direction of travel — decode budget goes
       // where the scroll is going, not evenly behind and ahead.
-      const movingBackward = currentIndex < lastIndexRef.current;
+      const delta = currentIndex - lastIndexRef.current;
+      const movingBackward = delta < 0;
       lastIndexRef.current = currentIndex;
+      // Moving faster than one ladder rung per tick means exact-frame
+      // fetches at the leading edge will be stale before they arrive —
+      // in that regime all network budget goes to the ladder instead.
+      const fastScroll = Math.abs(delta) > LADDER_STRIDE;
       const ahead = movingBackward ? WINDOW_MINOR : WINDOW_MAJOR;
       const behind = movingBackward ? WINDOW_MAJOR : WINDOW_MINOR;
 
@@ -255,8 +383,13 @@ export function useWindowedFrames(sectionId, sceneId) {
         end + EVICTION_GRACE
       );
 
-      // Drop queued-but-not-yet-started work that's now outside the window.
-      queueRef.current = queueRef.current.filter((i) => i >= start && i <= end);
+      // Drop queued-but-not-yet-started work outside the grace-padded
+      // bounds (the pump's own two-tier check handles the rest — local-
+      // blob work stays eligible there, network work needs the strict
+      // window).
+      queueRef.current = queueRef.current.filter(
+        (i) => i >= start - EVICTION_GRACE && i <= end + EVICTION_GRACE
+      );
 
       // Priority order: the frame actually being displayed first, then
       // radiating outward — so a burst of newly-queued work (e.g. a fast
@@ -268,15 +401,107 @@ export function useWindowedFrames(sectionId, sceneId) {
         if (currentIndex - offset >= start) priorityOrder.push(currentIndex - offset);
       }
 
+      // Ladder rungs within the grace-padded window, nearest first — the
+      // guaranteed-landable decodes that keep the display advancing when
+      // exact-frame decodes can't keep up with scroll speed.
+      const nearestRung = Math.round(currentIndex / LADDER_STRIDE) * LADDER_STRIDE;
+      for (let k = 0; k * LADDER_STRIDE <= EVICTION_GRACE; k++) {
+        const forward = nearestRung + k * LADDER_STRIDE;
+        const backward = nearestRung - k * LADDER_STRIDE;
+        if (forward < descriptor.count && forward <= end + EVICTION_GRACE) priorityOrder.push(forward);
+        if (k > 0 && backward >= 0 && backward >= start - EVICTION_GRACE) priorityOrder.push(backward);
+      }
+
+      const decodeQueued = new Set(queueRef.current);
       for (const i of priorityOrder) {
         const key = frameCacheKey(sectionId, sceneId, i);
-        if (cacheManager.hasImage(key) || inFlightRef.current.has(i) || queueRef.current.includes(i)) continue;
+        if (cacheManager.hasImage(key) || inFlightRef.current.has(i) || decodeQueued.has(i)) continue;
+        decodeQueued.add(i);
         queueRef.current.push(i);
       }
 
       pump();
+
+      // ── Prefetch tier: keep compressed bytes resident far beyond the
+      // decode window, biased the same direction. Evict blobs that fell
+      // outside the range (bounded ~180 × ~90KB ≈ 17MB), queue missing
+      // ones radiating outward from the decode window's leading edge.
+      const prefetchAhead = movingBackward ? PREFETCH_MINOR : PREFETCH_MAJOR;
+      const prefetchBehind = movingBackward ? PREFETCH_MAJOR : PREFETCH_MINOR;
+      const pStart = Math.max(0, currentIndex - prefetchBehind);
+      const pEnd = Math.min(descriptor.count - 1, currentIndex + prefetchAhead);
+      // The pump's staleness skip uses grace-padded bounds so in-flight
+      // work that drifted slightly behind the range isn't wasted.
+      prefetchRangeRef.current = { start: pStart - PREFETCH_GRACE, end: pEnd + PREFETCH_GRACE };
+
+      // Evict non-ladder blobs outside the grace-padded range. Ladder
+      // blobs are permanent by design (see LADDER_STRIDE) — they're the
+      // ~15MB that keeps fast scrolling fluid forever after first fetch.
+      for (const index of blobsRef.current.keys()) {
+        if (isLadderIndex(index)) continue;
+        if (index < pStart - PREFETCH_GRACE || index > pEnd + PREFETCH_GRACE) {
+          blobsRef.current.delete(index);
+        }
+      }
+
+      // Rebuilt from scratch every tick — priorities must reflect where
+      // the scroll is NOW; carrying over yesterday's queue order lets
+      // stale near-range work sit ahead of urgently-needed ladder rungs.
+      // (In-flight fetches are unaffected; this only reorders waiting work.)
+      prefetchQueueRef.current = [];
+      const queued = new Set();
+      const enqueuePrefetch = (i) => {
+        if (blobsRef.current.has(i) || blobInFlightRef.current.has(i) || queued.has(i)) return;
+        queued.add(i);
+        prefetchQueueRef.current.push(i);
+      };
+
+      // Two request families, allocated by ORDER, never by exclusion —
+      // the queue is rebuilt each tick, so under a saturated connection
+      // whatever is enqueued first wins the bandwidth, while a fast
+      // connection simply drains both and everything gets fetched:
+      //
+      //  - exact frames around the current position (direction-biased):
+      //    what makes a slow/paused scrub pixel-exact.
+      //  - ladder rungs from here across the whole sequence in the
+      //    direction of travel: the display's fallback material that
+      //    keeps motion continuous when scroll outruns the network.
+      //
+      // Fast movement puts the ladder first (exact frames would be stale
+      // on arrival anyway); slow movement puts exact frames first.
+      const step = movingBackward ? -1 : 1;
+      const enqueueExactRange = () => {
+        for (let i = currentIndex; i >= pStart && i <= pEnd; i += step) enqueuePrefetch(i);
+        for (let i = currentIndex - step; i >= pStart && i <= pEnd; i -= step) enqueuePrefetch(i);
+      };
+      // Two-level: a coarse pass (4× the stride — full-sequence coverage
+      // for ~a quarter of the bytes, so SOMETHING is decodable everywhere
+      // within the first seconds even on a slow connection) and then the
+      // fine pass that refines to LADDER_STRIDE. Both direction-first.
+      const enqueueLadder = () => {
+        const coarse = LADDER_STRIDE * 4;
+        const currentCoarse = Math.round(currentIndex / coarse) * coarse;
+        const coarseStep = movingBackward ? -coarse : coarse;
+        for (let r = currentCoarse; r >= 0 && r < descriptor.count; r += coarseStep) enqueuePrefetch(r);
+        for (let r = currentCoarse - coarseStep; r >= 0 && r < descriptor.count; r -= coarseStep) enqueuePrefetch(r);
+
+        const currentRung = Math.round(currentIndex / LADDER_STRIDE) * LADDER_STRIDE;
+        const rungStep = movingBackward ? -LADDER_STRIDE : LADDER_STRIDE;
+        for (let r = currentRung; r >= 0 && r < descriptor.count; r += rungStep) enqueuePrefetch(r);
+        for (let r = currentRung - rungStep; r >= 0 && r < descriptor.count; r -= rungStep) enqueuePrefetch(r);
+      };
+
+      if (fastScroll) {
+        enqueueLadder();
+        enqueueExactRange();
+      } else {
+        enqueueExactRange();
+        enqueueLadder();
+      }
+
+      prefetchPump();
     },
-    [descriptor, pump, sectionId, sceneId]
+    [descriptor, pump, prefetchPump, sectionId, sceneId]
   );
 
   const getFrame = useCallback(

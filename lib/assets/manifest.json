@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-19T20:49:22.368Z",
+  "generatedAt": "2026-07-20T06:18:31.447Z",
   "sectionOrder": [
     "section-1",
     "section-2",
@@ -12,7 +12,7 @@
       "frames": {
         "frames": {
           "path": "/sections/section-1/",
-          "count": 1185,
+          "count": 593,
           "prefix": "frame_",
           "extension": "webp",
           "padding": 4,
@@ -79,8 +79,11 @@
   },
   "fonts": {},
   "assets": {
+    "errorImage": {
+      "path": "/assets/errorImage.png"
+    },
     "loadingScreen": {
-      "path": "/assets/loadingScreen.png"
+      "path": "/assets/loadingScreen.webp"
     }
   }
 }

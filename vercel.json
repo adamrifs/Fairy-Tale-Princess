@@ -2,7 +2,7 @@
   "framework": "nextjs",
   "headers": [
     {
-      "source": "/assets/(.*)",
+      "source": "/(assets|sections|music|sounds|fonts)/(.*)",
       "headers": [
         {
           "key": "Cache-Control",

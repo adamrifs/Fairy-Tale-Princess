@@ -65,7 +65,7 @@ export function LoadingOverlay({
       )}
     >
       <img
-        src="/assets/loadingScreen.png"
+        src="/assets/loadingScreen.webp"
         alt=""
         className="absolute inset-0 h-full w-full object-cover opacity-30"
       />

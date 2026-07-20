@@ -119,7 +119,7 @@ async function decodeFrame(url, signal, resizeWidth, prefetchedBlob) {
   if (typeof createImageBitmap === "function") {
     let blob = prefetchedBlob;
     if (!blob) {
-      const response = await fetch(url, { signal });
+      const response = await fetch(url, { signal, cache: "force-cache" });
       if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
       blob = await response.blob();
     }
@@ -252,7 +252,7 @@ export function useWindowedFrames(sectionId, sceneId) {
       const url = resolveFrameUrl(descriptor, index);
       const signal = abortRef.current?.signal;
 
-      fetch(url, { signal })
+      fetch(url, { signal, cache: "force-cache" })
         .then((response) => (response.ok ? response.blob() : null))
         .then((blob) => {
           if (blob && !signal?.aborted) {

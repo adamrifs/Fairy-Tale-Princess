@@ -245,6 +245,7 @@ export function useWindowedFrames(sectionId, sceneId) {
       // is dropped when the range has left it behind.
       if (!isLadderIndex(index) && (index < start || index > end)) continue;
       if (blobsRef.current.has(index) || blobInFlightRef.current.has(index)) continue;
+      if (cacheManager.hasBlob(frameCacheKey(sectionId, sceneId, index))) continue; // preloaded up front
 
       blobInFlightRef.current.add(index);
       activePrefetchCountRef.current += 1;
@@ -294,12 +295,14 @@ export function useWindowedFrames(sectionId, sceneId) {
       // bandwidth-starved exact-frame downloads while already-local
       // ladder rungs (15ms decodes that would have kept the canvas
       // advancing) queued behind them — the pipeline clogged itself.
-      // The prefetch tier owns all fetching and will wake this pump
-      // (see prefetchPump) the moment bytes land.
-      if (!blobsRef.current.has(index)) continue;
+      // Bytes come from the shared blob cache (preloaded in full on the
+      // loading screen — the common case, so nothing here ever waits on
+      // the network) or, as a fallback, this hook's own prefetch tier.
+      const key = frameCacheKey(sectionId, sceneId, index);
+      const blob = blobsRef.current.get(index) ?? cacheManager.getBlob(key);
+      if (!blob) continue;
       if (index < start - EVICTION_GRACE || index > end + EVICTION_GRACE) continue;
 
-      const key = frameCacheKey(sectionId, sceneId, index);
       if (cacheManager.hasImage(key) || inFlightRef.current.has(index)) continue;
 
       inFlightRef.current.add(index);
@@ -308,7 +311,7 @@ export function useWindowedFrames(sectionId, sceneId) {
       const url = resolveFrameUrl(descriptor, index);
       const signal = abortRef.current?.signal;
 
-      decodeFrame(url, signal, targetWidthRef.current, blobsRef.current.get(index))
+      decodeFrame(url, signal, targetWidthRef.current, blob)
         .then((bitmap) => {
           if (signal?.aborted) {
             bitmap.close?.();
@@ -452,6 +455,11 @@ export function useWindowedFrames(sectionId, sceneId) {
       const queued = new Set();
       const enqueuePrefetch = (i) => {
         if (blobsRef.current.has(i) || blobInFlightRef.current.has(i) || queued.has(i)) return;
+        // Already downloaded up front on the loading screen — no fetch
+        // needed. When the full-sequence preload has completed (the normal
+        // case) every index short-circuits here and the prefetch tier does
+        // nothing at all, which is exactly what keeps scroll network-free.
+        if (cacheManager.hasBlob(frameCacheKey(sectionId, sceneId, i))) return;
         queued.add(i);
         prefetchQueueRef.current.push(i);
       };

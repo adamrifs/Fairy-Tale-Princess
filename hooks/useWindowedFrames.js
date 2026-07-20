@@ -7,7 +7,7 @@ import { getDevicePixelRatio } from "@/utils";
 
 /**
  * How many frames to keep decoded around the current position. Source
- * frames ship at 1600px (~90KB webp; 4K originals live in assets-src/),
+ * frames ship at 1280px (~70KB webp; 4K originals live in assets-src/),
  * and decodes are further downscaled to display resolution when smaller
  * (see decodeFrame) — a resident decoded frame costs ~4-6MB of RGBA.
  * Worst-case residency is the window plus EVICTION_GRACE on each side
@@ -52,7 +52,7 @@ const EVICTION_GRACE = 30;
 /**
  * Network prefetch tier: compressed blobs are fetched this many frames
  * around the current position — far wider than the decode window, and
- * cheap to hold (~90KB compressed each ≈ ~17MB for the whole range,
+ * cheap to hold (~70KB compressed each ≈ ~13MB for the whole range,
  * vs ~5MB per DECODED frame). This exists for production: on localhost
  * every fetch is ~instant so the decode window alone stays fed, but over
  * a real network (CDN latency + limited bandwidth) fetching only when a
@@ -80,7 +80,7 @@ const PREFETCH_GRACE = 60;
 /**
  * Keyframe ladder: every LADDER_STRIDE-th frame's compressed blob is
  * fetched progressively in the background and NEVER evicted (~148 blobs
- * × ~100KB ≈ 15MB — trivial). This is what makes fast scrolling smooth
+ * × ~70KB ≈ 10MB — trivial). This is what makes fast scrolling smooth
  * when scroll demand exceeds network supply: bandwidth can never keep up
  * with every frame at ~300 frames/s of scrub demand, but ladder frames
  * are always local, so the decoder can land a nearby frame every tick
@@ -90,6 +90,22 @@ const PREFETCH_GRACE = 60;
  * in-flight fetch goes stale before it can be shown.
  */
 const LADDER_STRIDE = 8;
+
+/**
+ * Native width of the source frames (see assets-src/section-1-4k/ ->
+ * public/sections/section-1/ re-encode step — 1280px q60 webp, chosen
+ * because the frame sequence always renders under a bg-black/40 overlay
+ * with text on top; A/B against 1600px q70 was visually indistinguishable
+ * once darkened, at 36% fewer pixels to decode and 30% fewer bytes to
+ * download). Decode-time resize is capped at this so it only ever
+ * DOWNSCALES. Without the cap, any viewport × DPR wider than the source
+ * (true for most desktop/laptop screens — a 1440px-wide retina display
+ * alone asks for 2880) made createImageBitmap UPSCALE every single
+ * frame: real CPU cost per decode for zero quality gain, since upscaling
+ * can't recover detail the source doesn't have. Capping this is a pure
+ * win, not a quality trade-off.
+ */
+const SOURCE_FRAME_WIDTH = 1280;
 
 function isLadderIndex(index) {
   return index % LADDER_STRIDE === 0;
@@ -204,7 +220,7 @@ export function useWindowedFrames(sectionId, sceneId) {
   const targetWidthRef = useRef(null); // decode-time resize width, computed lazily in the browser
 
   // Network prefetch tier state — compressed blobs, index-keyed.
-  const blobsRef = useRef(new Map()); // index -> Blob (compressed bytes, ~90KB each)
+  const blobsRef = useRef(new Map()); // index -> Blob (compressed bytes, ~70KB each)
   const blobInFlightRef = useRef(new Set());
   const prefetchQueueRef = useRef([]);
   const activePrefetchCountRef = useRef(0);
@@ -348,11 +364,14 @@ export function useWindowedFrames(sectionId, sceneId) {
       if (!descriptor || descriptor.count === 0) return;
 
       // Decode-time resize target: the canvas covers the viewport, so
-      // decoding wider than viewport × DPR is pure waste (the sources
-      // are 4K). Computed lazily here because window isn't available at
+      // decoding wider than viewport × DPR is pure waste on a large
+      // source — capped at SOURCE_FRAME_WIDTH so this only ever
+      // downscales, never upscales the (already display-sized) source.
+      // Computed lazily here because window isn't available at
       // module/render scope during SSR.
       if (targetWidthRef.current === null && typeof window !== "undefined") {
-        targetWidthRef.current = Math.ceil(window.innerWidth * getDevicePixelRatio());
+        const viewportWidth = Math.ceil(window.innerWidth * getDevicePixelRatio());
+        targetWidthRef.current = Math.min(viewportWidth, SOURCE_FRAME_WIDTH);
       }
 
       // Bias the window in the direction of travel — decode budget goes
@@ -427,7 +446,7 @@ export function useWindowedFrames(sectionId, sceneId) {
 
       // ── Prefetch tier: keep compressed bytes resident far beyond the
       // decode window, biased the same direction. Evict blobs that fell
-      // outside the range (bounded ~180 × ~90KB ≈ 17MB), queue missing
+      // outside the range (bounded ~180 × ~70KB ≈ 13MB), queue missing
       // ones radiating outward from the decode window's leading edge.
       const prefetchAhead = movingBackward ? PREFETCH_MINOR : PREFETCH_MAJOR;
       const prefetchBehind = movingBackward ? PREFETCH_MAJOR : PREFETCH_MINOR;

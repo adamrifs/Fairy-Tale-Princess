@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { cn } from "@/utils";
 import { FantasyCapsuleButton } from "./FantasyCapsuleButton";
 import { FantasyScenery } from "./FantasyScenery";
@@ -47,6 +48,33 @@ export function LoadingOverlay({
   children,
   className,
 }) {
+  const [introState, setIntroState] = useState(0);
+
+  useEffect(() => {
+    if (isLoaded) {
+      setIntroState(1);
+      
+      const t1 = setTimeout(() => setIntroState(2), 50);
+      const t2 = setTimeout(() => setIntroState(3), 1750);
+      const t3 = setTimeout(() => setIntroState(4), 3250);
+      
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
+    }
+  }, [isLoaded]);
+
+  const [buttonVisible, setButtonVisible] = useState(false);
+
+  useEffect(() => {
+    if (introState === 4) {
+      const t = setTimeout(() => setButtonVisible(true), 50);
+      return () => clearTimeout(t);
+    }
+  }, [introState]);
+
   if (!isVisible) return null;
 
   const percentage = Math.min(100, Math.max(0, Math.round(progress * 100)));
@@ -75,8 +103,27 @@ export function LoadingOverlay({
       <div className="bg-glow bg-glow-2"></div>
 
       {isLoaded ? (
-        <div className="absolute inset-0 flex items-center justify-center animate-fade-in z-20">
-          <FantasyCapsuleButton onClick={onEnter}>Enter Tale</FantasyCapsuleButton>
+        <div className="absolute inset-0 flex items-center justify-center z-20 flex-col">
+          {introState >= 1 && introState <= 3 && (
+            <h2
+              className={cn(
+                "fantasy-title transition-opacity duration-[1500ms] ease-in-out text-center px-6 tracking-[0.25em]",
+                introState === 2 ? "opacity-100" : "opacity-0"
+              )}
+            >
+              A Cinematic Fairytale Begins...
+            </h2>
+          )}
+          {introState === 4 && (
+            <div 
+              className={cn(
+                "transition-all duration-[2000ms] ease-out transform",
+                buttonVisible ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-4 scale-95"
+              )}
+            >
+              <FantasyCapsuleButton onClick={onEnter}>Enter Tale</FantasyCapsuleButton>
+            </div>
+          )}
         </div>
       ) : (
         <div className="widget-wrapper w-full h-full animate-fade-in" id="loading-widget">

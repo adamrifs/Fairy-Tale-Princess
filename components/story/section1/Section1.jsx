@@ -15,7 +15,7 @@ import { SECTION1_ID, SECTION1_TEXTS } from "@/data/story/section1";
  */
 export const Section1 = memo(function Section1() {
   return (
-    <StorySection id={SECTION1_ID} texts={SECTION1_TEXTS} animationVh={600}>
+    <StorySection id={SECTION1_ID} texts={SECTION1_TEXTS} animationVh={600} textVisibleProgress={0.90}>
       {({ progress }) => <Section1Scene progress={progress} />}
     </StorySection>
   );

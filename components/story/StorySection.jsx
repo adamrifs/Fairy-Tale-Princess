@@ -56,6 +56,7 @@ export const StorySection = memo(function StorySection({
   frameCount = 0,
   animationVh = 250,
   textVh = 300,
+  textVisibleProgress = 0.97,
   className,
   children,
 }) {
@@ -165,7 +166,7 @@ export const StorySection = memo(function StorySection({
           {typeof children === "function"
             ? children({ progress: scene.animationProgress, frame: scene.frame, phase: scene.phase })
             : children}
-          <StoryText texts={texts} activeIndex={scene.storyIndex} isVisible={scene.phase !== STORY_PHASE.ANIMATING || scene.animationProgress > 0.97} />
+          <StoryText texts={texts} activeIndex={scene.storyIndex} isVisible={scene.phase !== STORY_PHASE.ANIMATING || scene.animationProgress > textVisibleProgress} />
         </StoryTransition>
       </div>
     </SectionWrapper>

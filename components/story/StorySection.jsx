@@ -1,9 +1,10 @@
 "use client";
 
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { usePinnedSection } from "@/hooks/usePinnedSection";
 import { useStory } from "@/hooks/useStory";
 import { useScene } from "@/hooks/useScene";
+import { useLenis } from "@/hooks/useLenis";
 import { ScrollTrigger } from "@/lib/gsap";
 import { STORY_PHASE } from "@/lib/story/SceneManager";
 import { StoryText } from "./StoryText";
@@ -56,7 +57,7 @@ export const StorySection = memo(function StorySection({
   texts = [],
   frameCount = 0,
   animationVh = 250,
-  textVh = 300,
+  textVh = 180,
   textVisibleProgress = 0.97,
   className,
   children,
@@ -68,6 +69,83 @@ export const StorySection = memo(function StorySection({
   const totalVh = animationVh + textVh;
   const [isTextPinned, setIsTextPinned] = useState(false);
   const [isEntering, setIsEntering] = useState(false);
+  const timersRef = useRef([]);
+
+  const lenis = useLenis();
+
+  const stopTextSequence = useCallback(() => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    if (lenis) lenis.start();
+  }, [lenis]);
+
+  const startTextSequence = useCallback(() => {
+    stopTextSequence();
+    if (texts.length === 0) return;
+
+    if (lenis) lenis.stop(); // Lock scroll during cinematic text playback
+
+    story.setStoryIndex(0);
+
+    const DURATION_PER_TEXT = 1500; // 1.5s per text line for fixed cinematic reading time
+
+    texts.forEach((_, index) => {
+      if (index === 0) return;
+      const timerId = setTimeout(() => {
+        story.setStoryIndex(index);
+      }, index * DURATION_PER_TEXT);
+      timersRef.current.push(timerId);
+    });
+
+    const totalDuration = texts.length * DURATION_PER_TEXT;
+    const finalTimerId = setTimeout(() => {
+      // Keep scroll locked manually during the entire transition sequence
+      // We must temporarily start lenis for the programmatic scrollTo to work!
+      if (lenis) lenis.start();
+
+      story.setPinned(false);
+      setIsTextPinned(false);
+      story.setTransitioning(true, id);
+      story.setPhase(STORY_PHASE.TRANSITIONING);
+
+      // Smoothly advance to the next section
+      const nextIdMatch = id.match(/section-(\d+)/);
+      const scrollDuration = 1.5;
+      
+      if (nextIdMatch) {
+        const nextNum = parseInt(nextIdMatch[1]) + 1;
+        const nextEl = document.getElementById(`section-${nextNum}`);
+        if (nextEl && lenis) {
+          // lock: true disables user scrolling during this tween
+          lenis.scrollTo(nextEl, { offset: 0, duration: scrollDuration, lock: true });
+        }
+      }
+
+      // Cleanup transition state after scroll to the next section completes
+      const cleanupTimer = setTimeout(() => {
+        // Immediately STOP lenis so the user cannot scroll during the fade-in!
+        if (lenis) lenis.stop();
+        
+        story.setTransitioning(false, id);
+        
+        // The incoming section now starts its cinematic fade-in from black (takes 1.4s).
+        // Wait for it to fully reveal before returning scroll control to the user!
+        const unlockTimer = setTimeout(() => {
+          if (lenis) lenis.start();
+        }, 1400);
+        timersRef.current.push(unlockTimer);
+        
+      }, scrollDuration * 1000);
+      
+      timersRef.current.push(cleanupTimer);
+    }, totalDuration);
+
+    timersRef.current.push(finalTimerId);
+  }, [id, story, texts, stopTextSequence, lenis]);
+
+  useEffect(() => {
+    return () => stopTextSequence();
+  }, [stopTextSequence]);
 
   useEffect(() => {
     story.registerSection(id, order);
@@ -107,10 +185,12 @@ export const StorySection = memo(function StorySection({
       }
     },
     onEnter: () => {
+      stopTextSequence();
       story.setActiveSection(id);
       story.setPhase(STORY_PHASE.ANIMATING);
     },
     onEnterBack: () => {
+      stopTextSequence();
       story.setActiveSection(id);
       story.setPhase(STORY_PHASE.ANIMATING);
     },
@@ -146,31 +226,27 @@ export const StorySection = memo(function StorySection({
     getDistance: () => (textVh / 100) * window.innerHeight,
     dependencies: [id, textVh, texts.length, animationVh],
     onUpdate: (self) => {
-      const index = texts.length > 0 ? Math.min(texts.length - 1, Math.floor(self.progress * texts.length)) : 0;
-      story.setStoryIndex(index);
       story.setSectionProgress(id, (animationVh + self.progress * textVh) / totalVh);
     },
     onEnter: () => {
       story.setPinned(true);
       setIsTextPinned(true);
       story.setPhase(STORY_PHASE.TEXT);
+      startTextSequence();
     },
     onEnterBack: () => {
       story.setActiveSection(id);
       story.setPinned(true);
       setIsTextPinned(true);
-      // Scrolling back up into the text phase reverses the outgoing crossfade
-      // — clear this section's transition so it returns to full opacity.
       story.setTransitioning(false, id);
       story.setPhase(STORY_PHASE.TEXT);
+      startTextSequence();
     },
     onLeave: () => {
-      story.setPinned(false);
-      setIsTextPinned(false);
-      story.setTransitioning(true, id);
-      story.setPhase(STORY_PHASE.TRANSITIONING);
+      // Transition is handled automatically by final timer in startTextSequence
     },
     onLeaveBack: () => {
+      stopTextSequence();
       story.setPinned(false);
       setIsTextPinned(false);
     },
@@ -214,11 +290,15 @@ export const StorySection = memo(function StorySection({
           scene.isTransitioning ? "fixed z-20 pointer-events-none" : isEntering ? "fixed z-10" : isTextPinned ? "fixed z-10" : "sticky z-10"
         )}
       >
-        <StoryTransition active={scene.isTransitioning} entering={isEntering} className="absolute inset-0">
+        <StoryTransition
+          active={scene.isTransitioning}
+          isActive={scene.isActive}
+          className="absolute inset-0"
+        >
           {typeof children === "function"
             ? children({ progress: scene.animationProgress, frame: scene.frame, phase: scene.phase })
             : children}
-          <StoryText texts={texts} activeIndex={scene.storyIndex} isVisible={scene.isActive && (scene.phase !== STORY_PHASE.ANIMATING || scene.animationProgress > textVisibleProgress)} />
+          <StoryText texts={texts} activeIndex={scene.storyIndex} isVisible={(scene.isActive || scene.isTransitioning) && (scene.phase !== STORY_PHASE.ANIMATING || scene.animationProgress > textVisibleProgress)} />
         </StoryTransition>
       </div>
     </SectionWrapper>

@@ -1,6 +1,7 @@
 import { Cormorant_Garamond, EB_Garamond, Cinzel } from "next/font/google";
 import { RootProviders } from "@/providers";
 import { BGMPlayer } from "@/components/audio/BGMPlayer";
+import { FirstSectionButton } from "@/components/navigation/FirstSectionButton";
 import "./globals.css";
 
 // next/font self-hosts and subsets at build time — no runtime request to
@@ -50,6 +51,7 @@ export default function RootLayout({ children }) {
       <body className="bg-white font-sans text-moon-white antialiased">
         <RootProviders>{children}</RootProviders>
         <BGMPlayer />
+        <FirstSectionButton />
       </body>
     </html>
   );

@@ -16,7 +16,12 @@ export const SECTION2_TITLE = "Reflections of a Longing Heart";
 
 export const SECTION2_TEXTS = [
   {
-    heading: "A Life Behind Golden Doors",
-    subtitle: "Each morning she was dressed in silk and adorned with jewels, her every wish attended before she could speak it. Yet as the mirror caught her reflection, she wondered if anyone would ever see past the crown to the girl who dreamed of a world beyond these walls.",
+    subtitle: "Every day began with royal traditions and graceful routines.",
+  },
+  {
+    subtitle: "As her curls danced in the morning light, she quietly watched the world beyond her window.",
+  },
+  {
+    subtitle: "She often wondered if somewhere... someone was thinking of her just as she was thinking of them.",
   },
 ];

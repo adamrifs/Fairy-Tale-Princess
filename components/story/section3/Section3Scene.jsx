@@ -3,6 +3,9 @@
 import { memo, useEffect, useRef } from "react";
 import { useWindowedFrames } from "@/hooks/useWindowedFrames";
 import { FrameSequencePlayer } from "@/components/story/section1/FrameSequencePlayer";
+import { assetManager } from "@/lib/assets/AssetManager";
+import { frameManager } from "@/lib/assets/FrameManager";
+import { idleCallback, cancelIdleCallback } from "@/utils/timing";
 import { SECTION3_ID, SECTION3_SCENE_ID } from "@/data/story/section3";
 
 /**
@@ -35,6 +38,40 @@ export const Section3Scene = memo(function Section3Scene({ progress = 0 }) {
   useEffect(() => {
     loadWindow(0);
     // loadWindow is stable (useCallback); only run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Full-sequence warm (Section 3 lag fix) ─────────────────────────────
+  // MemoryManager only fully downloads Section 1 (the loading screen) and
+  // Section 2 (Section 1's "next"). Section 3 is two hops down the residency
+  // chain and never gets that full warm — only this component's own windowed
+  // prefetch tier, which reaches ~150 frames ahead of frame 0. That leaves the
+  // back half of the sequence to stream in ON-DEMAND mid-scroll (measured:
+  // ~130 network fetches during the first scrub), a network wait the decoder
+  // can't hide — which is the lag. Warm the ENTIRE blob set here in the
+  // background (exactly the full download FrameManager already does for
+  // Section 2) so scrubbing Section 3 is network-free like Section 2. Deferred
+  // until the previous section has finished so it never splits bandwidth with
+  // the loading screen or Section 2's own warm. Scoped entirely to Section 3 —
+  // it only fills the shared blob cache (the windowed loader skips anything
+  // already cached), touching nothing in other sections.
+  useEffect(() => {
+    const prevId = assetManager.getPreviousSectionId(SECTION3_ID);
+    const prevScene = prevId ? assetManager.getFrames(prevId)?.id : null;
+    let idleHandle = null;
+    let timer = null;
+    const warmWhenPrevReady = () => {
+      if (!prevId || frameManager.isLoaded(prevId, prevScene)) {
+        idleHandle = idleCallback(() => frameManager.loadSectionFrames(SECTION3_ID));
+      } else {
+        timer = setTimeout(warmWhenPrevReady, 1000);
+      }
+    };
+    timer = setTimeout(warmWhenPrevReady, 1000);
+    return () => {
+      if (timer) clearTimeout(timer);
+      if (idleHandle !== null) cancelIdleCallback(idleHandle);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

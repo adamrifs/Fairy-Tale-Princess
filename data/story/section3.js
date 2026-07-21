@@ -16,7 +16,17 @@ export const SECTION3_TITLE = "A Taste of Fleeting Joy";
 
 export const SECTION3_TEXTS = [
   {
-    heading: "Every Sweetness the Kingdom Could Offer",
-    subtitle: "Golden delicacies were laid before her from dawn until dusk, each one crafted to delight a princess's heart. Yet with every fleeting taste of sweetness, she felt the same quiet ache—that all the treasures in the world could never fill the place where true love was meant to be.",
+    subtitle: "Ferrero Rocher... her favorite royal delight.",
+  },
+  {
+    subtitle: "There was one little joy that never failed to make her smile.",
+  },
+  {
+    subtitle:
+      "Even the sweetest moments faded too quickly when there was no one special to share them with.",
+  },
+  {
+    subtitle:
+      "Some happiness is complete only when it is shared with the right person.",
   },
 ];

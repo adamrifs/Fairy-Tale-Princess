@@ -78,11 +78,13 @@ export const StoryText = memo(function StoryText({
             className="absolute inset-0 m-auto flex h-fit max-w-5xl flex-col items-center justify-center px-4 text-center opacity-0"
             style={{ transform: "translateY(40px)", willChange: "transform, opacity" }}
           >
-            <h2 className="text-balance font-display bg-gradient-to-b from-[#fffae6] via-[#ffd066] to-[#b8860b] bg-clip-text text-transparent text-5xl sm:text-6xl md:text-7xl lg:text-[5.5rem] xl:text-[6.5rem] leading-[1.1] tracking-wide font-normal drop-shadow-[0_4px_24px_rgba(0,0,0,0.85)] py-2">
-              {heading}
-            </h2>
+            {heading && (
+              <h2 className="text-balance font-display bg-gradient-to-b from-[#fffae6] via-[#ffd066] to-[#b8860b] bg-clip-text text-transparent text-5xl sm:text-6xl md:text-7xl lg:text-[5.5rem] xl:text-[6.5rem] leading-[1.1] tracking-wide font-normal drop-shadow-[0_4px_24px_rgba(0,0,0,0.85)] py-2">
+                {heading}
+              </h2>
+            )}
             {subtitle && (
-              <p className="mt-6 max-w-4xl text-balance font-serif italic text-xl md:text-2xl lg:text-3xl font-normal leading-[1.8] tracking-widest text-[#fffdf0] drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)] opacity-90">
+              <p className={cn("max-w-4xl text-balance font-serif italic text-xl md:text-2xl lg:text-3xl font-normal leading-[1.8] tracking-widest text-[#fffdf0] drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)] opacity-90", heading && "mt-6")}>
                 {subtitle}
               </p>
             )}

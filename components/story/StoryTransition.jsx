@@ -35,7 +35,7 @@ import { cn } from "@/utils";
  * no white flash, no dark frame. Honors prefers-reduced-motion by snapping
  * straight to the end state instead of tweening.
  */
-export const StoryTransition = memo(function StoryTransition({ active = false, className, children }) {
+export const StoryTransition = memo(function StoryTransition({ active = false, entering = false, className, children }) {
   const ref = useRef(null);
   const { reducedMotion } = useAnimationContext();
 
@@ -46,24 +46,38 @@ export const StoryTransition = memo(function StoryTransition({ active = false, c
     const node = ref.current;
     if (!node) return undefined;
 
-    if (!active) {
-      gsap.set(node, { opacity: 1, scale: 1 });
-      return undefined;
-    }
-
     if (reducedMotion) {
-      gsap.set(node, { opacity: 0, scale: 1.03 });
+      if (active) gsap.set(node, { opacity: 0, scale: 1.03 });
+      else gsap.set(node, { opacity: 1, scale: 1 });
       return undefined;
     }
 
-    const tween = gsap.to(node, {
-      opacity: 0,
-      scale: 1.03,
-      duration: DURATION.transition,
-      ease: EASE.standard,
-    });
-    return () => tween.kill();
-  }, [active, reducedMotion]);
+    if (active) {
+      const tween = gsap.to(node, {
+        opacity: 0,
+        scale: 1.03,
+        duration: DURATION.transition,
+        ease: EASE.standard,
+      });
+      return () => tween.kill();
+    } 
+    
+    if (entering) {
+      const tween = gsap.fromTo(node, 
+        { opacity: 0, scale: 1.03 },
+        {
+          opacity: 1,
+          scale: 1,
+          duration: DURATION.transition,
+          ease: EASE.standard,
+        }
+      );
+      return () => tween.kill();
+    }
+
+    gsap.set(node, { opacity: 1, scale: 1 });
+    return undefined;
+  }, [active, entering, reducedMotion]);
 
   return (
     <div ref={ref} className={cn("h-full w-full", className)} style={{ willChange: "opacity, transform" }}>

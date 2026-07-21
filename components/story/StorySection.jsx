@@ -67,6 +67,7 @@ export const StorySection = memo(function StorySection({
   const scene = useScene(id);
   const totalVh = animationVh + textVh;
   const [isTextPinned, setIsTextPinned] = useState(false);
+  const [isEntering, setIsEntering] = useState(false);
 
   useEffect(() => {
     story.registerSection(id, order);
@@ -174,6 +175,17 @@ export const StorySection = memo(function StorySection({
     },
   });
 
+  usePinnedSection({
+    triggerRef: sectionRef,
+    pin: false,
+    start: "top bottom",
+    getDistance: () => window.innerHeight,
+    onEnter: () => setIsEntering(true),
+    onLeave: () => setIsEntering(false),
+    onEnterBack: () => setIsEntering(true),
+    onLeaveBack: () => setIsEntering(false),
+  });
+
   return (
     <SectionWrapper
       ref={sectionRef}
@@ -196,9 +208,12 @@ export const StorySection = memo(function StorySection({
       */}
       <div
         ref={stageRef}
-        className={cn("top-0 h-dvh w-full overflow-hidden", isTextPinned ? "fixed" : "sticky")}
+        className={cn(
+          "top-0 h-dvh w-full overflow-hidden", 
+          scene.isTransitioning ? "fixed z-20 pointer-events-none" : isEntering ? "fixed z-10" : isTextPinned ? "fixed z-10" : "sticky z-10"
+        )}
       >
-        <StoryTransition active={scene.isTransitioning} className="absolute inset-0">
+        <StoryTransition active={scene.isTransitioning} entering={isEntering} className="absolute inset-0">
           {typeof children === "function"
             ? children({ progress: scene.animationProgress, frame: scene.frame, phase: scene.phase })
             : children}

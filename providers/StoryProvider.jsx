@@ -28,7 +28,7 @@ export function StoryProvider({ children }) {
       setFrame: (frame) => sceneManager.setFrame(frame),
       setStoryIndex: (index) => sceneManager.setStoryIndex(index),
       setPinned: (isPinned) => sceneManager.setPinned(isPinned),
-      setTransitioning: (isTransitioning) => sceneManager.setTransitioning(isTransitioning),
+      setTransitioning: (isTransitioning, sectionId) => sceneManager.setTransitioning(isTransitioning, sectionId),
       setSectionProgress: (id, localProgress) => sceneManager.setSectionProgress(id, localProgress),
     }),
     [snapshot]

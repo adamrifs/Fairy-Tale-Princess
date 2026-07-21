@@ -23,6 +23,7 @@ export function StoryProvider({ children }) {
       registerSection: (id, order) => sceneManager.registerSection(id, order),
       unregisterSection: (id) => sceneManager.unregisterSection(id),
       setActiveSection: (id) => sceneManager.setActiveSection(id),
+      forceActivateSection: (id) => sceneManager.forceActivateSection(id),
       setPhase: (phase) => sceneManager.setPhase(phase),
       setAnimationProgress: (progress) => sceneManager.setAnimationProgress(progress),
       setFrame: (frame) => sceneManager.setFrame(frame),

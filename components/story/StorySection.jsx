@@ -99,45 +99,65 @@ export const StorySection = memo(function StorySection({
 
     const totalDuration = texts.length * DURATION_PER_TEXT;
     const finalTimerId = setTimeout(() => {
-      // Keep scroll locked manually during the entire transition sequence
-      // We must temporarily start lenis for the programmatic scrollTo to work!
-      if (lenis) lenis.start();
+      // ── TRANSITION SEQUENCE ──────────────────────────────────────────
+      // The cinematic transition has 3 phases:
+      //   Phase 1: Fade TO black (1.4s) — the outgoing section dims out.
+      //   Phase 2: While fully black, jump scroll to the next section
+      //            and force-activate it.
+      //   Phase 3: The incoming section's StoryTransition naturally
+      //            detects isActive=true and fades FROM black (1.4s).
+      //
+      // Scroll is locked the entire time so the user can't interfere.
+      // ────────────────────────────────────────────────────────────────
 
       story.setPinned(false);
       setIsTextPinned(false);
       story.setTransitioning(true, id);
       story.setPhase(STORY_PHASE.TRANSITIONING);
 
-      // Smoothly advance to the next section
-      const nextIdMatch = id.match(/section-(\d+)/);
-      const scrollDuration = 1.5;
-      
-      if (nextIdMatch) {
-        const nextNum = parseInt(nextIdMatch[1]) + 1;
-        const nextEl = document.getElementById(`section-${nextNum}`);
-        if (nextEl && lenis) {
-          // lock: true disables user scrolling during this tween
-          lenis.scrollTo(nextEl, { offset: 0, duration: scrollDuration, lock: true });
-        }
-      }
+      // Phase 1: Wait for the fade-to-black to complete (1.4s animation)
+      const FADE_DURATION = 1400;
 
-      // Cleanup transition state after scroll to the next section completes
-      const cleanupTimer = setTimeout(() => {
-        // Immediately STOP lenis so the user cannot scroll during the fade-in!
-        if (lenis) lenis.stop();
-        
-        story.setTransitioning(false, id);
-        
-        // The incoming section now starts its cinematic fade-in from black (takes 1.4s).
-        // Wait for it to fully reveal before returning scroll control to the user!
+      const phase2Timer = setTimeout(() => {
+        // Phase 2: Screen is now fully black. Jump to the next section.
+        const nextIdMatch = id.match(/section-(\d+)/);
+        if (nextIdMatch) {
+          const nextNum = parseInt(nextIdMatch[1]) + 1;
+          const nextSectionId = `section-${nextNum}`;
+          const nextEl = document.getElementById(nextSectionId);
+
+          if (nextEl && lenis) {
+            // Briefly start Lenis to do an instant (non-animated) jump.
+            // This keeps Lenis's internal position in sync with the real
+            // scroll position. ScrollTrigger onEnter calls on the next
+            // section are harmless — setActiveSection is guarded by
+            // isTransitioning which is still true at this point.
+            lenis.start();
+            lenis.scrollTo(nextEl, { immediate: true });
+            lenis.stop();
+          }
+
+          // Clear transition state from the outgoing section FIRST
+          story.setTransitioning(false, id);
+
+          // Force-activate the incoming section — this sets currentSection
+          // and triggers the StoryTransition's fade-FROM-black via isActive.
+          story.forceActivateSection(nextSectionId);
+        } else {
+          // No next section — just clear transition state
+          story.setTransitioning(false, id);
+        }
+
+        // Phase 3: The incoming section's StoryTransition handles the
+        // fade-from-black automatically (1.4s). Unlock scroll after it's done.
         const unlockTimer = setTimeout(() => {
           if (lenis) lenis.start();
-        }, 1400);
+        }, FADE_DURATION);
         timersRef.current.push(unlockTimer);
-        
-      }, scrollDuration * 1000);
-      
-      timersRef.current.push(cleanupTimer);
+
+      }, FADE_DURATION);
+      timersRef.current.push(phase2Timer);
+
     }, totalDuration);
 
     timersRef.current.push(finalTimerId);

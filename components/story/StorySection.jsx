@@ -156,6 +156,7 @@ export const StorySection = memo(function StorySection({
       story.setPhase(STORY_PHASE.TEXT);
     },
     onEnterBack: () => {
+      story.setActiveSection(id);
       story.setPinned(true);
       setIsTextPinned(true);
       // Scrolling back up into the text phase reverses the outgoing crossfade
@@ -217,7 +218,7 @@ export const StorySection = memo(function StorySection({
           {typeof children === "function"
             ? children({ progress: scene.animationProgress, frame: scene.frame, phase: scene.phase })
             : children}
-          <StoryText texts={texts} activeIndex={scene.storyIndex} isVisible={scene.phase !== STORY_PHASE.ANIMATING || scene.animationProgress > textVisibleProgress} />
+          <StoryText texts={texts} activeIndex={scene.storyIndex} isVisible={scene.isActive && (scene.phase !== STORY_PHASE.ANIMATING || scene.animationProgress > textVisibleProgress)} />
         </StoryTransition>
       </div>
     </SectionWrapper>

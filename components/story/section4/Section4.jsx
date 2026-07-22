@@ -14,7 +14,7 @@ export const Section4 = memo(function Section4() {
       textVisibleProgress={0.90}
       isFinale={true}
     >
-      {() => <Section4Scene />}
+      {(props) => <Section4Scene {...props} />}
     </StorySection>
   );
 });

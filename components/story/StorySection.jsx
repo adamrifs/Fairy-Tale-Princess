@@ -91,7 +91,7 @@ export const StorySection = memo(function StorySection({
 
     story.setStoryIndex(0);
 
-    const DURATION_PER_TEXT = 1500; // 1.5s per text line for fixed cinematic reading time
+    const DURATION_PER_TEXT = 5000; // 1.5s per text line for fixed cinematic reading time
 
     texts.forEach((_, index) => {
       if (index === 0) return;

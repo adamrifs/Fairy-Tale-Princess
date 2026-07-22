@@ -66,13 +66,49 @@ export function BGMPlayer({ className }) {
     };
   }, []);
 
+  const fadeAudio = (from, to, duration, onComplete) => {
+    if (!soundRef.current) return;
+    const startTime = performance.now();
+    
+    const animate = (currentTime) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      const currentVol = from + (to - from) * progress;
+      if (soundRef.current) {
+        soundRef.current.volume(currentVol);
+      }
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        if (onComplete) onComplete();
+      }
+    };
+    
+    requestAnimationFrame(animate);
+  };
+
   const togglePlay = () => {
     if (!soundRef.current) return;
     
     if (isPlaying) {
-      soundRef.current.pause();
+      setIsPlaying(false);
+      const currentVol = soundRef.current.volume();
+      
+      fadeAudio(currentVol, 0, 1000, () => {
+        if (soundRef.current && soundRef.current.volume() === 0) {
+          soundRef.current.pause();
+        }
+      });
     } else {
-      soundRef.current.play();
+      setIsPlaying(true);
+      if (!soundRef.current.playing()) {
+        soundRef.current.volume(0);
+        soundRef.current.play();
+      }
+      const currentVol = soundRef.current.volume();
+      fadeAudio(currentVol, 0.5, 1000);
     }
   };
 

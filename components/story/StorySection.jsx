@@ -60,6 +60,7 @@ export const StorySection = memo(function StorySection({
   textVh = 180,
   textVisibleProgress = 0.97,
   className,
+  isFinale = false,
   children,
 }) {
   const sectionRef = useRef(null);
@@ -81,7 +82,10 @@ export const StorySection = memo(function StorySection({
 
   const startTextSequence = useCallback(() => {
     stopTextSequence();
-    if (texts.length === 0) return;
+    if (texts.length === 0) {
+      if (isFinale && lenis) lenis.stop();
+      return;
+    }
 
     if (lenis) lenis.stop(); // Lock scroll during cinematic text playback
 
@@ -98,6 +102,13 @@ export const StorySection = memo(function StorySection({
     });
 
     const totalDuration = texts.length * DURATION_PER_TEXT;
+
+    if (isFinale) {
+      // For the finale section, we do not fade out or transition to another section.
+      // We keep the screen locked and the final text visible.
+      return;
+    }
+
     const finalTimerId = setTimeout(() => {
       // ── TRANSITION SEQUENCE ──────────────────────────────────────────
       // The cinematic transition has 3 phases:

@@ -26,6 +26,11 @@ const Section3 = dynamic(
   { ssr: false }
 );
 
+const Section4 = dynamic(
+  () => import("@/components/story/section4/Section4").then((mod) => mod.Section4),
+  { ssr: false }
+);
+
 export default function Home() {
   return (
     <PageWrapper>
@@ -34,6 +39,7 @@ export default function Home() {
         <Section1 />
         <Section2 />
         <Section3 />
+        <Section4 />
       </StoryLayout>
     </PageWrapper>
   );
